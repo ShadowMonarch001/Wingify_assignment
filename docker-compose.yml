@@ -1,0 +1,104 @@
+## ─────────────────────────────────────────────────────────────────────────────
+## docker-compose.yml  —  Full local stack: API + Worker + Redis + PostgreSQL
+## ─────────────────────────────────────────────────────────────────────────────
+## Usage:
+##   docker-compose up --build
+##   API:  http://localhost:8000
+##   Docs: http://localhost:8000/docs
+## ─────────────────────────────────────────────────────────────────────────────
+
+
+services:
+
+  # ── Redis — message broker and Celery result backend ─────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fda_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── PostgreSQL — persistent storage ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: fda_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fda_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fda_password}
+      POSTGRES_DB: ${POSTGRES_DB:-financial_analyzer}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # BUG FIX #2: Original hardcoded `fda_user` and `financial_analyzer`.
+      # If the env vars are ever changed, the healthcheck would keep reporting
+      # "healthy" (or broken) independently of the actual DB state.
+      # Fix: use the same env vars that postgres itself uses.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fda_user} -d ${POSTGRES_DB:-financial_analyzer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI application ────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: fda_api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fda_user:fda_password@postgres:5432/financial_analyzer
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Celery worker ─────────────────────────────────────────────────────────
+  worker:
+    build: .
+    container_name: fda_worker
+    command: celery -A worker.celery_app worker --queues=analysis --concurrency=2 --loglevel=info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fda_user:fda_password@postgres:5432/financial_analyzer
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Flower — Celery monitoring dashboard (optional) ───────────────────────
+  flower:
+    build: .
+    container_name: fda_flower
+    command: celery -A worker.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - worker
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
