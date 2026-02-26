@@ -619,6 +619,10 @@ Primary model rate-limited? LiteLLM falls through automatically: OpenRouter auto
 ---
 
 ## Sample Output — Tesla Q2 2025 Analysis
+<img width="896" height="858" alt="analysis" src="https://github.com/user-attachments/assets/6cd40099-7daf-440c-9630-f98de6696b99" />
+<img width="1190" height="862" alt="result" src="https://github.com/user-attachments/assets/f49c3644-03ea-4e48-a4f0-15a03fa43e9e" />
+<img width="1322" height="442" alt="result1" src="https://github.com/user-attachments/assets/a8cb9670-1c7b-40dd-be5d-585d9c786711" />
+
 
 **Query:** `What is Tesla's revenue trend, profitability outlook, and key investment risks based on this quarter?`
 **Document:** `TSLA-Q2-2025-Update.pdf`
